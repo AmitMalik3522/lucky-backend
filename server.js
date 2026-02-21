@@ -140,6 +140,43 @@ app.get("/generate-qrs", adminAuth, async (req, res) => {
     res.status(500).send("Error generating QR codes");
   }
 });
+// =========================
+// 📦 Download All QRs as ZIP (Protected)
+// =========================
+const archiver = require("archiver");
+
+app.get("/download-qrs", adminAuth, async (req, res) => {
+  try {
+    const tokens = await Token.find();
+
+    if (!fs.existsSync("./qrs")) {
+      return res
+        .status(400)
+        .json({ message: "QR folder not found. Generate QRs first." });
+    }
+
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", "attachment; filename=all-qrs.zip");
+
+    const archive = archiver("zip", {
+      zlib: { level: 9 },
+    });
+
+    archive.pipe(res);
+
+    for (let t of tokens) {
+      const filePath = `./qrs/${t.token}.png`;
+      if (fs.existsSync(filePath)) {
+        archive.file(filePath, { name: `${t.token}.png` });
+      }
+    }
+
+    await archive.finalize();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error creating ZIP file" });
+  }
+});
 
 // =========================
 // 🎁 Redeem QR
