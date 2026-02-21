@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Elite Reward</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+body{
+  font-family:'Poppins',sans-serif;
+  height:100vh;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  background:radial-gradient(circle at center,#0f0c29,#000);
+  overflow:hidden;
+  color:white;
+}
+
+/* Background animated glow */
+body::before{
+  content:"";
+  position:absolute;
+  width:700px;
+  height:700px;
+  background:radial-gradient(circle,rgba(255,215,0,0.25),transparent);
+  animation:pulse 4s infinite alternate;
+}
+@keyframes pulse{
+  from{transform:scale(1);opacity:.4}
+  to{transform:scale(1.4);opacity:.8}
+}
+
+/* Card */
+.card{
+  position:relative;
+  width:400px;
+  padding:80px 60px;
+  border-radius:30px;
+  background:rgba(255,255,255,0.05);
+  backdrop-filter:blur(30px);
+  text-align:center;
+  box-shadow:0 50px 100px rgba(0,0,0,.8);
+  transform-style:preserve-3d;
+  transition:transform .2s ease;
+  border:2px solid transparent;
+  background-clip:padding-box;
+}
+
+/* Animated gradient border */
+.card::before{
+  content:"";
+  position:absolute;
+  inset:-2px;
+  border-radius:32px;
+  background:linear-gradient(45deg,#FFD700,#FF0080,#00F0FF,#FFD700);
+  z-index:-1;
+  animation:borderMove 6s linear infinite;
+}
+@keyframes borderMove{
+  0%{background-position:0 0}
+  100%{background-position:400% 0}
+}
+
+h1{
+  letter-spacing:3px;
+  font-size:16px;
+  opacity:.7;
+}
+
+.amount{
+  font-size:72px;
+  font-weight:800;
+  margin-top:35px;
+  background:linear-gradient(90deg,#FFD700,#FFA500,#FFD700);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  transform:scale(.5);
+  opacity:0;
+}
+
+.amount.show{
+  animation:reveal .8s ease forwards;
+}
+@keyframes reveal{
+  to{transform:scale(1);opacity:1}
+}
+
+.status{
+  margin-top:25px;
+  font-size:14px;
+  opacity:.6;
+}
+
+/* Floating particles */
+.particle{
+  position:absolute;
+  width:5px;
+  height:5px;
+  border-radius:50%;
+  background:rgba(255,255,255,.2);
+  animation:float 20s linear infinite;
+}
+@keyframes float{
+  from{transform:translateY(100vh)}
+  to{transform:translateY(-10vh)}
+}
+</style>
+</head>
+
+<body>
+
+<div class="card" id="card">
+  <h1>ELITE REWARD</h1>
+  <div class="amount" id="result">₹0</div>
+  <div class="status" id="status">Authenticating...</div>
+</div>
+
+<audio id="winSound">
+<source src="https://assets.mixkit.co/sfx/preview/mixkit-winning-chimes-2015.mp3" type="audio/mpeg">
+</audio>
+
+<script>
+// 3D tilt effect
+const card=document.getElementById("card");
+document.addEventListener("mousemove",(e)=>{
+  const x=(window.innerWidth/2-e.pageX)/25;
+  const y=(window.innerHeight/2-e.pageY)/25;
+  card.style.transform=`rotateY(${x}deg) rotateX(${y}deg)`;
+});
+
+// Floating particles
+for(let i=0;i<60;i++){
+  const p=document.createElement("div");
+  p.classList.add("particle");
+  p.style.left=Math.random()*100+"vw";
+  p.style.animationDuration=(Math.random()*15+10)+"s";
+  document.body.appendChild(p);
+}
+
+// Fetch reward
+const token=window.location.pathname.substring(1);
+
+fetch(`/redeem/${token}`)
+.then(res=>res.json())
+.then(data=>{
+  if(data.amount){
+    animateCounter(data.amount);
+    document.getElementById("status").innerText="You Are A Winner!";
+    document.getElementById("winSound").play();
+    rarityTheme(data.amount);
+  }else{
+    document.getElementById("result").innerText="❌";
+    document.getElementById("status").innerText="Invalid or Used";
+  }
+});
+
+// Animated counter
+function animateCounter(target){
+  const el=document.getElementById("result");
+  let current=0;
+  const step=target/80;
+
+  const interval=setInterval(()=>{
+    current+=step;
+    if(current>=target){
+      current=target;
+      clearInterval(interval);
+      el.classList.add("show");
+    }
+    el.innerText="₹"+Math.floor(current);
+  },20);
+}
+
+// Rarity system
+function rarityTheme(amount){
+  const body=document.body;
+  if(amount>=200){
+    body.style.background="radial-gradient(circle,#FFD700,#000)";
+  }else if(amount>=100){
+    body.style.background="radial-gradient(circle,#8E2DE2,#000)";
+  }else{
+    body.style.background="radial-gradient(circle,#1f4037,#000)";
+  }
+}
+</script>
+
+</body>
+</html>
