@@ -1,4 +1,6 @@
-// Load environment variables from .env file
+// =========================
+// 🌍 Load Environment Variables
+// =========================
 require("dotenv").config();
 
 const express = require("express");
@@ -10,169 +12,70 @@ const crypto = require("crypto");
 
 const app = express();
 
-// Enable CORS (allows frontend from other domains)
+// =========================
+// ⚙ Middleware
+// =========================
 app.use(cors());
-
-// Parse incoming JSON requests
 app.use(express.json());
 
-// Connect to MongoDB Atlas
-mongoose.connect(process.env.MONGO_URI, {
-  writeConcern: { w: 1 }, // basic write mode (avoids replica issues)
+// =========================
+// 🗄 Connect to MongoDB Atlas
+// =========================
+mongoose.connect(process.env.MONGO_URI);
+
+mongoose.connection.on("connected", () => {
+  console.log("✅ MongoDB connected");
+});
+
+mongoose.connection.on("error", (err) => {
+  console.error("❌ MongoDB connection error:", err);
 });
 
 // =========================
-// 📦 TOKEN SCHEMA (Business Ready)
+// 📦 TOKEN SCHEMA
 // =========================
 const tokenSchema = new mongoose.Schema(
   {
-    // Unique secure token stored inside QR
     token: {
       type: String,
       required: true,
       unique: true,
       index: true,
     },
-
-    // Product name for tracking
     productName: {
       type: String,
       required: true,
     },
-
-    // Batch ID for business control
     batchId: {
       type: String,
       required: true,
     },
-
-    // Reward amount
     amount: {
       type: Number,
       default: 0,
     },
-
-    // Prevents reuse
     used: {
       type: Boolean,
       default: false,
     },
-
-    // When QR was redeemed
     redeemedAt: {
       type: Date,
     },
-
-    // Expiry date for QR validity
     expiryDate: {
       type: Date,
     },
-
-    // When token was created
     createdAt: {
       type: Date,
       default: Date.now,
     },
-
-    // Optional: Store customer phone later
     customerPhone: {
       type: String,
     },
   },
-  { versionKey: false }, // Removes __v field
+  { versionKey: false },
 );
 
 const Token = mongoose.model("Token", tokenSchema);
-
-// =========================
-// 🔐 Generate Secure Token
-// =========================
-function generateToken() {
-  return crypto.randomBytes(16).toString("hex");
-}
-
-// =========================
-// 🎟 Generate Tokens Route
-// =========================
-app.get("/generate-tokens", async (req, res) => {
-  try {
-    for (let i = 1; i <= 100; i++) {
-      await Token.create({
-        token: generateToken(),
-        productName: "Elite Reward Product",
-        batchId: "BATCH2026JAN",
-        expiryDate: new Date("2026-12-31"),
-      });
-    }
-
-    res.send("100 business-ready tokens created");
-  } catch (err) {
-    res.status(500).send("Error generating tokens");
-  }
-});
-
-// =========================
-// 🖼 Generate QR Images
-// =========================
-app.get("/generate-qrs", async (req, res) => {
-  const tokens = await Token.find();
-
-  // Create folder if not exists
-  if (!fs.existsSync("./qrs")) {
-    fs.mkdirSync("./qrs");
-  }
-
-  for (let t of tokens) {
-    await QRCode.toFile(
-      `./qrs/${t.token}.png`,
-      `http://localhost:3000/${t.token}`, // Change after deployment
-    );
-  }
-
-  res.send("QR codes generated");
-});
-
-// =========================
-// 🎁 Redeem QR
-// =========================
-app.get("/redeem/:token", async (req, res) => {
-  const tokenValue = req.params.token;
-
-  const tokenDoc = await Token.findOne({ token: tokenValue });
-
-  // Token not found
-  if (!tokenDoc) {
-    return res.status(404).json({ message: "Invalid QR" });
-  }
-
-  // Expiry check
-  if (tokenDoc.expiryDate && new Date() > tokenDoc.expiryDate) {
-    return res.status(400).json({ message: "QR expired" });
-  }
-
-  // Already used check
-  if (tokenDoc.used) {
-    return res.status(400).json({ message: "QR already used" });
-  }
-
-  // Assign reward
-  tokenDoc.amount = 100; // can replace with random logic
-  tokenDoc.used = true;
-  tokenDoc.redeemedAt = new Date();
-
-  await tokenDoc.save();
-
-  res.json({ amount: tokenDoc.amount });
-});
-function adminAuth(req, res, next) {
-  const password = req.headers["x-admin-password"];
-
-  if (!password || password !== process.env.ADMIN_PASSWORD) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  next();
-}
 
 // =========================
 // 🔐 Admin Authentication Middleware
@@ -188,7 +91,90 @@ function adminAuth(req, res, next) {
 }
 
 // =========================
-// 📊 Admin Dashboard Stats (Protected)
+// 🔐 Generate Secure Token
+// =========================
+function generateToken() {
+  return crypto.randomBytes(16).toString("hex");
+}
+
+// =========================
+// 🎟 Generate Tokens (Protected)
+// =========================
+app.get("/generate-tokens", adminAuth, async (req, res) => {
+  try {
+    for (let i = 1; i <= 100; i++) {
+      await Token.create({
+        token: generateToken(),
+        productName: "Elite Reward Product",
+        batchId: "BATCH2026JAN",
+        expiryDate: new Date("2026-12-31"),
+      });
+    }
+
+    res.send("✅ 100 business-ready tokens created");
+  } catch (err) {
+    res.status(500).send("Error generating tokens");
+  }
+});
+
+// =========================
+// 🖼 Generate QR Images (Protected)
+// =========================
+app.get("/generate-qrs", adminAuth, async (req, res) => {
+  try {
+    const tokens = await Token.find();
+
+    if (!fs.existsSync("./qrs")) {
+      fs.mkdirSync("./qrs");
+    }
+
+    for (let t of tokens) {
+      await QRCode.toFile(
+        `./qrs/${t.token}.png`,
+        `${process.env.BASE_URL}/${t.token}`,
+      );
+    }
+
+    res.send("✅ QR codes generated");
+  } catch (err) {
+    res.status(500).send("Error generating QR codes");
+  }
+});
+
+// =========================
+// 🎁 Redeem QR
+// =========================
+app.get("/redeem/:token", async (req, res) => {
+  try {
+    const tokenValue = req.params.token;
+    const tokenDoc = await Token.findOne({ token: tokenValue });
+
+    if (!tokenDoc) {
+      return res.status(404).json({ message: "Invalid QR" });
+    }
+
+    if (tokenDoc.expiryDate && new Date() > tokenDoc.expiryDate) {
+      return res.status(400).json({ message: "QR expired" });
+    }
+
+    if (tokenDoc.used) {
+      return res.status(400).json({ message: "QR already used" });
+    }
+
+    tokenDoc.amount = 100;
+    tokenDoc.used = true;
+    tokenDoc.redeemedAt = new Date();
+
+    await tokenDoc.save();
+
+    res.json({ amount: tokenDoc.amount });
+  } catch (err) {
+    res.status(500).json({ message: "Redemption error" });
+  }
+});
+
+// =========================
+// 📊 Admin Dashboard Stats
 // =========================
 app.get("/admin/stats", adminAuth, async (req, res) => {
   try {
@@ -218,7 +204,7 @@ app.get("/admin/stats", adminAuth, async (req, res) => {
 });
 
 // =========================
-// 📦 Product Wise Stats (Protected)
+// 📦 Product Wise Stats
 // =========================
 app.get("/admin/product-stats", adminAuth, async (req, res) => {
   try {
@@ -241,7 +227,7 @@ app.get("/admin/product-stats", adminAuth, async (req, res) => {
 });
 
 // =========================
-// 🌐 Serve Frontend Page
+// 🌐 Serve Frontend
 // =========================
 app.use(express.static("public"));
 
@@ -253,4 +239,7 @@ app.get("/:token", (req, res) => {
 // 🚀 Start Server
 // =========================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server running on port", PORT));
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
